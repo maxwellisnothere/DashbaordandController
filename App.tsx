@@ -1,25 +1,24 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { StyleSheet, Text, View, SafeAreaView, ActivityIndicator, TouchableOpacity, Dimensions, ScrollView } from 'react-native';
 import Paho from 'paho-mqtt';
-import Slider from '@react-native-community/slider';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 const { width } = Dimensions.get('window');
 
-// กำหนดธีมสี
+// 🎨 กำหนดธีมสี เขียว-ดำ (Dark Neon Theme)
 const COLORS = {
-  primary: '#1A237E', // น้ำเงินเข้มทันสมัย
-  accent: '#FF4081',  // ชมพูสดสำหรับเน้น
-  background: '#F0F2F5', // เทาอ่อนพื้นหลัง
+  primary: '#00FF66',     // เขียวนีออน
+  accent: '#00CC55',      // เขียวเข้มขึ้นมานิดนึง
+  background: '#090C10',  // ดำลึก (Deep Black)
   white: '#FFFFFF',
-  text: '#212121',
-  textSecondary: '#757575',
-  online: '#4CAF50',
-  offline: '#F44336',
-  cardBackground: '#FFFFFF',
+  text: '#E6EDF3',        // ขาวอมเทานิดๆ ให้สบายตา
+  textSecondary: '#8B949E',
+  online: '#00FF66',
+  offline: '#FF4444',
+  cardBackground: '#161B22', // ดำสว่างขึ้นมาสำหรับตัวการ์ด
+  cardBorder: '#30363D',     // สีกรอบขอบการ์ด
 };
 
-// กดยืนยันการวางโค้ดทั้งหมดทับ App.tsx เดิมได้เลยค่ะ
 export default function App() {
   const [activeTab, setActiveTab] = useState<'Dashboard' | 'Controls'>('Dashboard');
   const [temp, setTemp] = useState<number | string>('--');
@@ -27,21 +26,16 @@ export default function App() {
   const [gas, setGas] = useState<number | string>('--');
   const [isConnected, setIsConnected] = useState(false);
 
-  // ค่าสำหรับ Controls (Sliders)
-  const [ledBrightness, setLedBrightness] = useState(255); // 0-255
-  const [fanSpeed, setFanSpeed] = useState(0); // 0-100 (สมมติว่ามีพัดลม)
-  const [gasThreshold, setGasThreshold] = useState(1500); // 0-4095
+  // ค่าสำหรับ Controls
+  const [ledState, setLedState] = useState(false); // false = OFF, true = ON
   
   const clientRef = useRef<Paho.Client | null>(null);
 
-  // Topics
+  // Topics (แก้ topic LED ให้เป็นแบบควบคุม ON/OFF)
   const topicSubscribe = "project/sensor/data";
-  const topicPublishLED = "project/led/dimmer"; // ** topic ใหม่สำหรับสไลด์บาร์ **
-  const topicPublishFan = "project/fan/speed";  // ** topic ใหม่สมมติ **
-  const topicPublishGasLimit = "project/gas/threshold"; // ** topic ใหม่สมมติ **
+  const topicPublishLED = "project/led/control"; 
 
   useEffect(() => {
-    // --- MQTT Setup เหมือนเดิม ---
     const server = process.env.EXPO_PUBLIC_MQTT_SERVER || '';
     const port = Number(process.env.EXPO_PUBLIC_MQTT_PORT) || 8884;
     const user = process.env.EXPO_PUBLIC_MQTT_USER || '';
@@ -90,21 +84,27 @@ export default function App() {
     };
   }, []);
 
-  // ฟังก์ชันส่งค่า MQTT (เมื่อเลื่อนสไลด์บาร์)
-  const publishMqtt = (topic: string, value: string | number) => {
+  // ฟังก์ชันสลับสถานะไฟ LED (ON/OFF)
+  const toggleLED = () => {
+    if (!isConnected) return; // ถ้าไม่เชื่อมต่อเน็ต ห้ามกด
+    
+    const newState = !ledState;
+    setLedState(newState);
+    
     if (clientRef.current && clientRef.current.isConnected()) {
-      const message = new Paho.Message(String(value));
-      message.destinationName = topic;
+      const payload = newState ? "ON" : "OFF";
+      const message = new Paho.Message(payload);
+      message.destinationName = topicPublishLED;
       clientRef.current.send(message);
-      console.log(`Sent to ${topic}: ${value}`);
+      console.log(`Sent command: ${payload}`);
     }
   };
 
   // --- คอมโพเนนต์การ์ดข้อมูล (สำหรับ Dashboard) ---
   const DataCard = ({ icon, title, value, unit, color }: any) => (
     <View style={styles.card}>
-      <View style={[styles.iconContainer, { backgroundColor: color + '15' }]}>
-        <MaterialCommunityIcons name={icon} size={30} color={color} />
+      <View style={[styles.iconContainer, { backgroundColor: color + '20', borderColor: color, borderWidth: 1 }]}>
+        <MaterialCommunityIcons name={icon} size={28} color={color} />
       </View>
       <View style={styles.cardContent}>
         <Text style={styles.cardTitle}>{title}</Text>
@@ -114,102 +114,81 @@ export default function App() {
     </View>
   );
 
-  // --- คอมโพเนนต์สไลด์บาร์ (สำหรับ Controls) ---
-  const ControlSlider = ({ icon, title, value, unit, min, max, step, onValueChange, onSlidingComplete }: any) => (
-    <View style={styles.controlCard}>
-      <View style={styles.controlHeader}>
-        <MaterialCommunityIcons name={icon} size={26} color={COLORS.primary} />
-        <Text style={styles.controlCardTitle}>{title}</Text>
-        <Text style={styles.controlCardValue}>{value} {unit}</Text>
-      </View>
-      <Slider
-        style={styles.slider}
-        minimumValue={min}
-        maximumValue={max}
-        step={step}
-        value={value}
-        minimumTrackTintColor={COLORS.primary}
-        maximumTrackTintColor={COLORS.textSecondary}
-        thumbTintColor={COLORS.accent}
-        onValueChange={onValueChange}
-        onSlidingComplete={onSlidingComplete}
-      />
-    </View>
-  );
-
   // --- ส่วนหน้าจอ Dashboard ---
   const DashboardView = () => (
     <ScrollView contentContainerStyle={styles.scrollContent}>
-      <Text style={styles.viewHeader}>Dashboard</Text>
+      <Text style={styles.viewHeader}>SYSTEM<Text style={{color: COLORS.primary}}>_MONITOR</Text></Text>
       
-      {/* สถานะการเชื่อมต่อ */}
+      {/* สถานะการเชื่อมต่อ (แก้บั๊กตัวหนังสือ ActivityIndicator แล้ว) */}
       <View style={styles.statusContainer}>
-        <Text style={[styles.statusOnline, !isConnected && styles.statusOffline]}>
-          <MaterialCommunityIcons name={isConnected ? "signal" : "signal-off"} size={16} color={isConnected ? COLORS.online : COLORS.offline} />
-          {isConnected ? "🟢 Connected to HiveMQ" : "🔴 Disconnected <ActivityIndicator />"}
-        </Text>
+        <View style={styles.statusBadge}>
+          <MaterialCommunityIcons name={isConnected ? "lan-connect" : "lan-disconnect"} size={16} color={isConnected ? COLORS.online : COLORS.offline} />
+          <Text style={[styles.statusText, { color: isConnected ? COLORS.online : COLORS.offline }]}>
+            {isConnected ? " HIVE_MQ CONNECTED" : " DISCONNECTED"}
+          </Text>
+          {!isConnected && <ActivityIndicator size="small" color={COLORS.offline} style={{marginLeft: 8}} />}
+        </View>
       </View>
 
       {/* Grid ของข้อมูล Sensor */}
       <View style={styles.dataGrid}>
-        <DataCard icon="thermometer" title="Temperature" value={temp} unit="°C" color="#FF5722" />
-        <DataCard icon="water-percent" title="Humidity" value={hum} unit="%" color="#2196F3" />
-        <DataCard icon="smoke-detector" title="Gas Level" value={gas} unit="(0-4095)" color="#673AB7" />
-        {/* เพิ่มการ์ดสมมติเพื่อแสดง Grid สวยงาม */}
-        <DataCard icon="weather-windy" title="Air Quality" value="Good" unit="" color="#4CAF50" />
+        <DataCard icon="thermometer" title="TEMPERATURE" value={temp} unit="°C" color="#FF5722" />
+        <DataCard icon="water-percent" title="HUMIDITY" value={hum} unit="%" color="#00E5FF" />
+        <DataCard icon="smoke-detector-variant" title="GAS_LEVEL" value={gas} unit="RAW" color="#B388FF" />
+        <DataCard icon="shield-check-outline" title="STATUS" value="Active" unit="" color={COLORS.primary} />
       </View>
     </ScrollView>
   );
 
-  // --- ส่วนหน้าจอ Controls (Menu เฉพาะควบคุม) ---
+  // --- ส่วนหน้าจอ Controls (ปุ่มเปิดปิด) ---
   const ControlsView = () => (
     <ScrollView contentContainerStyle={styles.scrollContent}>
-      <Text style={styles.viewHeader}>Controls Menu</Text>
+      <Text style={styles.viewHeader}>MAIN<Text style={{color: COLORS.primary}}>_CONTROLS</Text></Text>
       
-      {/* สไลด์บาร์ควบคุม LED (ปรับความสว่าง) */}
-      <ControlSlider 
-        icon="lightbulb-outline" title="LED Brightness" 
-        value={ledBrightness} unit="" min={0} max={255} step={1} 
-        onValueChange={setLedBrightness}
-        onSlidingComplete={(val: number) => publishMqtt(topicPublishLED, Math.round(val))} // ส่ง MQTT เมื่อปล่อยมือ
-      />
+      <View style={styles.controlCenter}>
+        <Text style={styles.controlTitle}>LED SYSTEM</Text>
+        
+        {/* ปุ่มกดเปิด-ปิดล้ำๆ */}
+        <TouchableOpacity 
+          style={[
+            styles.powerButton, 
+            ledState ? styles.powerButtonON : styles.powerButtonOFF,
+            !isConnected && { opacity: 0.5 } // ถ้าไม่เชื่อมต่อให้ปุ่มจางลง
+          ]} 
+          onPress={toggleLED}
+          disabled={!isConnected}
+        >
+          <MaterialCommunityIcons 
+            name="power" 
+            size={60} 
+            color={ledState ? COLORS.background : COLORS.textSecondary} 
+          />
+        </TouchableOpacity>
 
-      {/* สไลด์บาร์ควบคุมพัดลม (สมมติ) */}
-      <ControlSlider 
-        icon="fan" title="Fan Speed" 
-        value={fanSpeed} unit="%" min={0} max={100} step={10} 
-        onValueChange={setFanSpeed}
-        onSlidingComplete={(val: number) => publishMqtt(topicPublishFan, Math.round(val))}
-      />
-
-      {/* สไลด์บาร์ควบคุม Gas Threshold (สมมติค่าแจ้งเตือน) */}
-      <ControlSlider 
-        icon="smoke-detector" title="Gas Alarm Limit" 
-        value={gasThreshold} unit="" min={0} max={4095} step={50} 
-        onValueChange={setGasThreshold}
-        onSlidingComplete={(val: number) => publishMqtt(topicPublishGasLimit, Math.round(val))}
-      />
+        <Text style={[styles.ledStatusText, { color: ledState ? COLORS.primary : COLORS.textSecondary }]}>
+          {ledState ? 'SYSTEM_ONLINE' : 'SYSTEM_OFFLINE'}
+        </Text>
+      </View>
 
     </ScrollView>
   );
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* ส่วนแสดงหน้าหลัก */}
       <View style={styles.mainView}>
         {activeTab === 'Dashboard' ? <DashboardView /> : <ControlsView />}
       </View>
 
-      {/* ส่วนเมนูด้านล่าง (Tab Navigation สมมติ) */}
+      {/* Tab Navigation สไตล์ Dark Mode */}
       <View style={styles.tabBar}>
         <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('Dashboard')}>
-          <MaterialCommunityIcons name="view-dashboard" size={26} color={activeTab === 'Dashboard' ? COLORS.primary : COLORS.textSecondary} />
-          <Text style={[styles.tabLabel, activeTab === 'Dashboard' && { color: COLORS.primary }]}>Dashboard</Text>
+          <MaterialCommunityIcons name="monitor-dashboard" size={26} color={activeTab === 'Dashboard' ? COLORS.primary : COLORS.textSecondary} />
+          <Text style={[styles.tabLabel, activeTab === 'Dashboard' && { color: COLORS.primary, fontWeight: 'bold' }]}>DASHBOARD</Text>
         </TouchableOpacity>
         
         <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('Controls')}>
-          <MaterialCommunityIcons name="controller-classic-outline" size={26} color={activeTab === 'Controls' ? COLORS.primary : COLORS.textSecondary} />
-          <Text style={[styles.tabLabel, activeTab === 'Controls' && { color: COLORS.primary }]}>Controls</Text>
+          <MaterialCommunityIcons name="gamepad-circle" size={26} color={activeTab === 'Controls' ? COLORS.primary : COLORS.textSecondary} />
+          <Text style={[styles.tabLabel, activeTab === 'Controls' && { color: COLORS.primary, fontWeight: 'bold' }]}>CONTROLS</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -226,29 +205,36 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 20,
-    paddingBottom: 100, // เว้นที่สำหรับ TabBar
+    paddingBottom: 100, 
   },
   viewHeader: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: COLORS.primary,
-    marginBottom: 10,
+    fontSize: 28,
+    fontWeight: '900',
+    color: COLORS.white,
+    marginBottom: 20,
     marginTop: 20,
     textAlign: 'center',
+    letterSpacing: 2,
   },
   statusContainer: {
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 30,
   },
-  statusOnline: {
-    fontSize: 14,
-    color: COLORS.online,
-    fontWeight: 'bold',
+  statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: COLORS.cardBackground,
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.cardBorder,
   },
-  statusOffline: {
-    color: COLORS.offline,
+  statusText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginLeft: 8,
+    letterSpacing: 1,
   },
   // Dashboard Styles
   dataGrid: {
@@ -258,76 +244,85 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: COLORS.cardBackground,
-    width: (width - 60) / 2, // 2 การ์ดต่อแถว
-    padding: 20,
-    borderRadius: 20,
+    width: (width - 60) / 2,
+    padding: 15,
+    borderRadius: 16,
     marginBottom: 20,
-    flexDirection: 'row',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
+    borderWidth: 1,
+    borderColor: COLORS.cardBorder,
   },
   iconContainer: {
-    width: 50,
-    height: 50,
-    borderRadius: 15,
+    width: 45,
+    height: 45,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 15,
+    marginBottom: 15,
   },
   cardContent: {
-    flex: 1,
     justifyContent: 'center',
   },
   cardTitle: {
-    fontSize: 12,
+    fontSize: 10,
     color: COLORS.textSecondary,
     marginBottom: 5,
+    fontWeight: 'bold',
+    letterSpacing: 1,
   },
   cardValue: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: 'bold',
-    color: COLORS.text,
+    color: COLORS.white,
   },
   cardUnit: {
     fontSize: 10,
     color: COLORS.textSecondary,
-    marginTop: -2,
+    marginTop: 2,
   },
   // Controls Styles
-  controlCard: {
-    backgroundColor: COLORS.cardBackground,
-    padding: 20,
-    borderRadius: 20,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  controlHeader: {
-    flexDirection: 'row',
+  controlCenter: {
     alignItems: 'center',
-    marginBottom: 15,
+    justifyContent: 'center',
+    marginTop: 40,
+    backgroundColor: COLORS.cardBackground,
+    padding: 40,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: COLORS.cardBorder,
   },
-  controlCardTitle: {
-    fontSize: 16,
+  controlTitle: {
+    color: COLORS.white,
+    fontSize: 18,
     fontWeight: 'bold',
-    color: COLORS.text,
-    marginLeft: 15,
-    flex: 1,
+    letterSpacing: 2,
+    marginBottom: 30,
   },
-  controlCardValue: {
-    fontSize: 16,
-    color: COLORS.primary,
+  powerButton: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 4,
+    marginBottom: 20,
+  },
+  powerButtonON: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 20,
+    elevation: 15,
+  },
+  powerButtonOFF: {
+    backgroundColor: 'transparent',
+    borderColor: COLORS.textSecondary,
+  },
+  ledStatusText: {
+    fontSize: 14,
     fontWeight: 'bold',
-  },
-  slider: {
-    width: '100%',
-    height: 40,
+    letterSpacing: 2,
   },
   // TabBar Styles
   tabBar: {
@@ -335,18 +330,13 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: 80,
-    backgroundColor: COLORS.white,
+    height: 85,
+    backgroundColor: COLORS.cardBackground,
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -10 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 10,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.cardBorder,
   },
   tabItem: {
     alignItems: 'center',
@@ -354,8 +344,9 @@ const styles = StyleSheet.create({
     width: 100,
   },
   tabLabel: {
-    fontSize: 12,
+    fontSize: 10,
     marginTop: 5,
     color: COLORS.textSecondary,
+    letterSpacing: 1,
   },
 });
