@@ -1,6 +1,5 @@
-ส่วนที่ 1: สร้างไฟล์ README.md
-
-ในโฟลเดอร์โปรเจกต์ Expo ของคุณ ให้สร้างไฟล์ชื่อ README.md (ถ้ามีอยู่แล้วให้ลบของเดิมทิ้ง) แล้วก๊อปปี้ข้อความด้านล่างนี้ไปวางได้เลยค่ะ จัดรูปแบบมาให้ดูเป็นมืออาชีพเรียบร้อยแล้ว:
+เข้าเล่น APP 
+https://iot-marine-monitor-2kcb2rljt-maxwellisnotheres-projects.vercel.app
 
 Markdown
 # 📱 Smart IoT Dashboard (React Native + Expo)
